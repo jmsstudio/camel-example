@@ -16,6 +16,15 @@ public class RotaPedidos {
             @Override
             public void configure() throws Exception {
                 from("file://pedidos?delay=5s&noop=true")
+                .routeId("route-pedidos")
+                .multicast()
+                    .parallelProcessing()
+                    .to("direct:http")
+                    .to("direct:routeSoap");
+
+
+                from("direct:http")
+                .routeId("route-http")
                     .setProperty("pedidoId", xpath("/pedido/id"))
                     .setProperty("clientId", xpath("/pedido/pagamento/email-titular"))
                     .split()
@@ -29,6 +38,11 @@ public class RotaPedidos {
                 .setHeader(Exchange.HTTP_METHOD, constant(HttpMethods.GET))
                 .setHeader(Exchange.HTTP_QUERY, simple("clienteId=${property.clientId}&pedidoId=${property.pedidoId}&ebookId=${property.ebookId}"))
                 .to("http4://localhost:8080/webservices/ebook/item");
+
+                from("direct:routeSoap")
+                .routeId("route-soap")
+                    .log("${id}")
+                    .to("mock:soap");
             }
         });
 
