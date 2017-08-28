@@ -5,6 +5,7 @@ import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.http4.HttpMethods;
 import org.apache.camel.impl.DefaultCamelContext;
+import org.apache.camel.processor.validation.SchemaValidationException;
 
 public class RotaPedidos {
 
@@ -15,8 +16,30 @@ public class RotaPedidos {
 		context.addRoutes(new RouteBuilder() {
             @Override
             public void configure() throws Exception {
+                onException(SchemaValidationException.class)
+                    .handled(true)
+                    .maximumRedeliveries(3)
+                    .redeliveryDelay(5000)
+                    .onRedelivery(e -> {
+                        int counter = (int) e.getIn().getHeader(Exchange.REDELIVERY_COUNTER);
+                        int max = (int) e.getIn().getHeader(Exchange.REDELIVERY_MAX_COUNTER);
+                        System.out.println("Redelivering... " + counter + "/" + max);
+                    });
+
+                errorHandler(
+                    deadLetterChannel("file:erro")
+                    .redeliveryDelay(3000)
+                    .maximumRedeliveries(3)
+                    .onRedelivery(e -> {
+                        int counter = (int) e.getIn().getHeader(Exchange.REDELIVERY_COUNTER);
+                        int max = (int) e.getIn().getHeader(Exchange.REDELIVERY_MAX_COUNTER);
+                        System.out.println("Redelivering... " + counter + "/" + max);
+                    })
+                );
+
                 from("file://pedidos?delay=5s&noop=true")
                 .routeId("route-pedidos")
+                .to("validator:pedido.xsd")
                 .multicast()
                     .parallelProcessing()
                     .to("direct:http")
