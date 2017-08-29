@@ -1,5 +1,6 @@
 package br.com.jmsstudio.camel;
 
+import org.apache.activemq.camel.component.ActiveMQComponent;
 import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
@@ -12,6 +13,9 @@ public class RotaPedidos {
 	public static void main(String[] args) throws Exception {
 
 		CamelContext context = new DefaultCamelContext();
+
+        context.addComponent("activemqJMS", ActiveMQComponent.activeMQComponent("tcp://localhost:61616"));
+
 
 		context.addRoutes(new RouteBuilder() {
             @Override
@@ -27,7 +31,8 @@ public class RotaPedidos {
                     });
 
                 errorHandler(
-                    deadLetterChannel("file:erro")
+//                    deadLetterChannel("file:erro")
+                    deadLetterChannel("activemqJMS:queue:fila.pedidos.DLQ")
                     .redeliveryDelay(3000)
                     .maximumRedeliveries(3)
                     .onRedelivery(e -> {
@@ -37,8 +42,9 @@ public class RotaPedidos {
                     })
                 );
 
-                from("file://pedidos?delay=5s&noop=true")
-                .routeId("route-pedidos")
+//                from("file://pedidos?delay=5s&noop=true")
+                from("activemqJMS:queue:fila.pedidos")
+                        .routeId("route-pedidos")
                 .to("validator:pedido.xsd")
                 .multicast()
                     .parallelProcessing()
